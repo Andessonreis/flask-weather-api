@@ -1,7 +1,8 @@
 import pandas as pd
-import os
+import re
+from typing import List, Tuple
 
-def read_csv(filename):
+def read_csv(filename: str) -> pd.DataFrame:
     '''
     Read CSV and create a dataframe, extracting "city" from the filename.
 
@@ -13,10 +14,11 @@ def read_csv(filename):
     '''
     city = extract_city_from_filename(filename)
     df = pd.read_csv(filename, encoding='iso-8859-1', decimal=',', delimiter=';', skiprows=8)
-    df['cidade'] = city
+    df['Cidade'] = city
     return df
 
-def extract_city_from_filename(filename):
+
+def extract_city_from_filename(filename: str) -> str:
     '''
     Extract city name from the filename.
 
@@ -26,10 +28,14 @@ def extract_city_from_filename(filename):
     Returns:
     - str: The extracted city name.
     '''
-    city = os.path.splitext(os.path.basename(filename))[0].split('_')[-1]
-    return city
 
-def check_header(df):
+    pattern = re.compile(r'_[^_]+_[^_]+_[^_]+_([^_]+)_')
+
+    match = re.search(pattern, filename)
+
+    return match.group(1) if match else ''
+
+def check_header(df: pd.DataFrame) -> Tuple[str, str, str, str]:
     '''
     Check header formats and return relevant column names and formats.
 
@@ -58,27 +64,42 @@ def check_header(df):
     
     return colname_date, colname_hour, ts_format, temp_format
 
-def preprocess_data(data):
+def preprocess_data(data: List[dict]) -> List[dict]:
     '''
-    Clean and preprocess data, converting null values and formatting date and time.
+    Clean and preprocess data, selecting essential fields and formatting date and time.
 
     Parameters:
     - data (list): List of dictionaries representing data points.
+
+    Returns:
+    - list: List of dictionaries containing processed data points.
     '''
-    unnecessary_columns = ['Unnamed: 19']
-    
-    # Remove unnecessary columns
-    for data_point in data:
-        for col in unnecessary_columns:
-            data_point.pop(col, None)
+    necessary_columns = [
+        "Cidade",
+        "Data",
+        "Hora UTC",
+        "PRECIPITAÇÃO TOTAL, HORÁRIO (mm)",
+        "PRESSAO ATMOSFERICA AO NIVEL DA ESTACAO, HORARIA (mB)",
+        "TEMPERATURA DO AR - BULBO SECO, HORARIA (°C)",
+        "UMIDADE RELATIVA DO AR, HORARIA (%)",
+        "VENTO, DIREÇÃO HORARIA (gr) (° (gr))",
+        "VENTO, VELOCIDADE HORARIA (m/s)"
+    ]
 
-    # Convert null values to None
+    processed_data = []
+
     for data_point in data:
-        for key, value in data_point.items():
+        processed_point = {key: data_point[key] for key in necessary_columns}
+        
+        # Convert null values to None
+        for key, value in processed_point.items():
             if pd.isna(value):
-                data_point[key] = None
+                processed_point[key] = None
 
-    # Format date and time
-    for data_point in data:
-        data_point['Data'] = pd.to_datetime(data_point['Data']).strftime('%Y-%m-%d')
-        data_point['Hora UTC'] = data_point['Hora UTC'].replace(' UTC', '')
+        # Format date and time
+        processed_point['Data'] = pd.to_datetime(processed_point['Data']).strftime('%Y-%m-%d')
+        processed_point['Hora UTC'] = processed_point['Hora UTC'].replace(' UTC', '')
+
+        processed_data.append(processed_point)
+
+    return processed_data
