@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 from typing import List, Tuple
+import sqlite3
 
 def read_csv(filename: str) -> pd.DataFrame:
     '''
@@ -17,7 +18,6 @@ def read_csv(filename: str) -> pd.DataFrame:
     df['Cidade'] = city
     return df
 
-
 def extract_city_from_filename(filename: str) -> str:
     '''
     Extract city name from the filename.
@@ -28,11 +28,8 @@ def extract_city_from_filename(filename: str) -> str:
     Returns:
     - str: The extracted city name.
     '''
-
     pattern = re.compile(r'_[^_]+_[^_]+_[^_]+_([^_]+)_')
-
     match = re.search(pattern, filename)
-
     return match.group(1) if match else ''
 
 def check_header(df: pd.DataFrame) -> Tuple[str, str, str, str]:
@@ -64,19 +61,20 @@ def check_header(df: pd.DataFrame) -> Tuple[str, str, str, str]:
     
     return colname_date, colname_hour, ts_format, temp_format
 
-def preprocess_data(data: List[dict]) -> List[dict]:
+def preprocess_data(data: List[dict], colname_date: str) -> List[dict]:
     '''
     Clean and preprocess data, selecting essential fields and formatting date and time.
 
     Parameters:
     - data (list): List of dictionaries representing data points.
+    - colname_date (str): The column name for the date.
 
     Returns:
     - list: List of dictionaries containing processed data points.
     '''
     necessary_columns = [
         "Cidade",
-        "Data",
+        colname_date,
         "Hora UTC",
         "PRECIPITAÇÃO TOTAL, HORÁRIO (mm)",
         "PRESSAO ATMOSFERICA AO NIVEL DA ESTACAO, HORARIA (mB)",
@@ -97,9 +95,26 @@ def preprocess_data(data: List[dict]) -> List[dict]:
                 processed_point[key] = None
 
         # Format date and time
-        processed_point['Data'] = pd.to_datetime(processed_point['Data']).strftime('%Y-%m-%d')
+        processed_point[colname_date] = pd.to_datetime(processed_point[colname_date]).strftime('%Y-%m-%d')
         processed_point['Hora UTC'] = processed_point['Hora UTC'].replace(' UTC', '')
 
         processed_data.append(processed_point)
 
     return processed_data
+
+def save_to_database(df, table_name):
+    '''
+    Save DataFrame to a SQLite database table.
+
+    Parameters:
+    - df (pd.DataFrame): The dataframe to be saved.
+    - table_name (str): The name of the table in the SQLite database.
+    '''
+    conn = sqlite3.connect('db.db')
+
+    try:
+        df.to_sql(table_name, conn, if_exists='replace', index=False)
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"SQLite Error: {e}")
+        conn.rollback()
